@@ -361,6 +361,19 @@
       </div>
 
       <div class="admin-card">
+        <h3>✏️ Editar picks de participantes</h3>
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px">Seleccioná un participante y editá sus pronósticos partido por partido. Útil para cargar picks que llegaron por WhatsApp.</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+          <select id="edit-player-select" class="result-select" style="flex:1;min-width:180px" onchange="loadPlayerPicks()">
+            <option value="">— Elegir participante —</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="refreshPlayerSelect()">🔄 Actualizar lista</button>
+        </div>
+        <div id="edit-picks-list"></div>
+        <div id="edit-picks-msg"></div>
+      </div>
+
+      <div class="admin-card">
         <h3>Configuración</h3>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
           <input type="text" id="new-admin-pass" placeholder="Nueva contraseña admin" style="flex:1;min-width:200px" />
@@ -598,6 +611,7 @@ async function loadAll() {
     players = {};
     snap.docs.forEach(d => { players[d.id] = d.data(); });
     renderStandings();
+    refreshPlayerSelect();
   });
 }
 
@@ -997,6 +1011,77 @@ function renderKnownResults() {
   }
 }
 
+// ─────────────────────────────────────────
+//  ADMIN — Edit participant picks
+// ─────────────────────────────────────────
+function refreshPlayerSelect() {
+  const sel = document.getElementById("edit-player-select");
+  if (!sel) return;
+  // Clear except placeholder
+  while (sel.options.length > 1) sel.remove(1);
+  for (const [uid, pdata] of Object.entries(players)) {
+    const opt = document.createElement("option");
+    opt.value = uid;
+    opt.textContent = pdata.name;
+    sel.appendChild(opt);
+  }
+}
+
+window.loadPlayerPicks = function() {
+  const uid = document.getElementById("edit-player-select").value;
+  const el = document.getElementById("edit-picks-list");
+  if (!uid || !el) return;
+  if (!matches.length) { el.innerHTML = '<p style="color:var(--text-dim);font-size:13px">Cargando partidos...</p>'; return; }
+
+  const labels = { "1": "Local", "X": "Empate", "2": "Visitante" };
+  const colSel = { "1": "selected-1", "X": "selected-X", "2": "selected-2" };
+
+  let out = "";
+  let lastDate = null;
+  for (const m of matches) {
+    if (m.date !== lastDate) {
+      out += '<div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;font-weight:600">' + formatDate(m.date) + '</div>';
+      lastDate = m.date;
+    }
+    const pick = (allVotes[m.id] || {})[uid] || "";
+    out += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">'
+         + '<div style="flex:1;font-size:13px;min-width:160px">' + m.homeFlag + ' ' + m.home + ' vs ' + m.awayFlag + ' ' + m.away + '</div>'
+         + '<div style="display:flex;gap:5px">';
+    for (const v of ["1","X","2"]) {
+      const isSel = pick === v;
+      const cls = isSel ? colSel[v] : "";
+      const lbl = v === "1" ? m.home : v === "X" ? "Empate" : m.away;
+      out += '<button class="vote-btn btn-sm ' + cls + '" style="flex:none;padding:5px 10px;font-size:12px" '
+           + 'onclick="setPickForPlayer('' + uid + '','' + m.id + '','' + v + '')">'
+           + v + ' <span style="font-size:10px;color:var(--text-dim)">' + lbl + '</span></button>';
+    }
+    if (pick) {
+      out += '<button class="vote-btn btn-sm" style="flex:none;padding:5px 8px;font-size:11px;color:var(--red);border-color:var(--red)" '
+           + 'onclick="setPickForPlayer('' + uid + '','' + m.id + '','')">✕</button>';
+    }
+    out += '</div></div>';
+  }
+  el.innerHTML = out;
+};
+
+window.setPickForPlayer = async (uid, matchId, pick) => {
+  const voteRef = doc(db, "votes", matchId);
+  if (pick === "") {
+    // remove pick — set to null/delete field
+    const snap = await getDoc(voteRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      delete data[uid];
+      await setDoc(voteRef, data);
+    }
+  } else {
+    await setDoc(voteRef, { [uid]: pick }, { merge: true });
+  }
+  showMsg("edit-picks-msg", "✓ Pick guardado", "ok");
+  // Re-render picks for this player
+  window.loadPlayerPicks();
+};
+
 window.applyKnownResults = async () => {
   let applied = 0;
   showMsg("known-msg", "⏳ Aplicando...", "ok");
@@ -1064,7 +1149,7 @@ window.showTab = (id, btn) => {
   btn.classList.add("active");
   if (id === "tab-standings") renderStandings();
   if (id === "tab-myvotes") renderMyVotes();
-  if (id === "tab-admin") { renderAdminMatches(); checkApiStatus(null); renderKnownResults(); }
+  if (id === "tab-admin") { renderAdminMatches(); checkApiStatus(null); renderKnownResults(); refreshPlayerSelect(); }
 };
 
 function formatDate(d) {
