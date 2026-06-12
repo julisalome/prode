@@ -351,10 +351,15 @@
 
       <div class="admin-card">
         <h3>Configuración</h3>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
           <input type="text" id="new-admin-pass" placeholder="Nueva contraseña admin" style="flex:1;min-width:200px" />
           <button class="btn btn-outline btn-sm" onclick="changeAdminPass()">Cambiar contraseña</button>
         </div>
+        <div style="border-top:1px solid var(--border);padding-top:12px">
+          <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px">⚠️ Reemplaza los partidos en Firestore con el fixture real del Mundial 2026 (borra los de prueba).</p>
+          <button class="btn btn-outline btn-sm" style="border-color:#ff3d3d;color:#ff3d3d" onclick="resetMatches()">🔄 Cargar fixture real del Mundial 2026</button>
+        </div>
+        <div id="reset-msg"></div>
       </div>
     </div>
 
@@ -398,18 +403,90 @@ let players = {};    // { userId: { name, ... } }
 // ── Partidos del Mundial 2026 (Fase de grupos, muestra) ──
 // Se cargan desde Firestore; si no existen, se inicializan con estos datos
 const INITIAL_MATCHES = [
-  { id:"m001", home:"México",       homeFlag:"🇲🇽", away:"EEUU",        awayFlag:"🇺🇸", group:"A", date:"2026-06-11", result:null },
-  { id:"m002", home:"Canadá",       homeFlag:"🇨🇦", away:"Argentina",   awayFlag:"🇦🇷", group:"A", date:"2026-06-12", result:null },
-  { id:"m003", home:"Brasil",       homeFlag:"🇧🇷", away:"Alemania",    awayFlag:"🇩🇪", group:"B", date:"2026-06-13", result:null },
-  { id:"m004", home:"Francia",      homeFlag:"🇫🇷", away:"España",      awayFlag:"🇪🇸", group:"C", date:"2026-06-13", result:null },
-  { id:"m005", home:"Inglaterra",   homeFlag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", away:"Portugal",    awayFlag:"🇵🇹", group:"D", date:"2026-06-14", result:null },
-  { id:"m006", home:"Uruguay",      homeFlag:"🇺🇾", away:"Colombia",    awayFlag:"🇨🇴", group:"E", date:"2026-06-14", result:null },
-  { id:"m007", home:"Países Bajos", homeFlag:"🇳🇱", away:"Bélgica",     awayFlag:"🇧🇪", group:"F", date:"2026-06-15", result:null },
-  { id:"m008", home:"Italia",       homeFlag:"🇮🇹", away:"Croacia",     awayFlag:"🇭🇷", group:"G", date:"2026-06-15", result:null },
-  { id:"m009", home:"Japón",        homeFlag:"🇯🇵", away:"Corea",       awayFlag:"🇰🇷", group:"H", date:"2026-06-16", result:null },
-  { id:"m010", home:"Marruecos",    homeFlag:"🇲🇦", away:"Senegal",     awayFlag:"🇸🇳", group:"I", date:"2026-06-16", result:null },
-  { id:"m011", home:"México",       homeFlag:"🇲🇽", away:"Argentina",   awayFlag:"🇦🇷", group:"A", date:"2026-06-17", result:null },
-  { id:"m012", home:"Brasil",       homeFlag:"🇧🇷", away:"Francia",     awayFlag:"🇫🇷", group:"B", date:"2026-06-18", result:null },
+  // ── GRUPO A ──
+  { id:"m001", home:"México",       homeFlag:"🇲🇽", away:"Sudáfrica",   awayFlag:"🇿🇦", group:"A", date:"2026-06-11", result:null },
+  { id:"m002", home:"Corea del Sur",homeFlag:"🇰🇷", away:"Chequia",     awayFlag:"🇨🇿", group:"A", date:"2026-06-11", result:null },
+  { id:"m003", home:"Chequia",      homeFlag:"🇨🇿", away:"Sudáfrica",   awayFlag:"🇿🇦", group:"A", date:"2026-06-18", result:null },
+  { id:"m004", home:"México",       homeFlag:"🇲🇽", away:"Corea del Sur",awayFlag:"🇰🇷", group:"A", date:"2026-06-18", result:null },
+  { id:"m005", home:"Chequia",      homeFlag:"🇨🇿", away:"México",      awayFlag:"🇲🇽", group:"A", date:"2026-06-24", result:null },
+  { id:"m006", home:"Sudáfrica",    homeFlag:"🇿🇦", away:"Corea del Sur",awayFlag:"🇰🇷", group:"A", date:"2026-06-24", result:null },
+  // ── GRUPO B ──
+  { id:"m007", home:"Canadá",       homeFlag:"🇨🇦", away:"Bosnia",      awayFlag:"🇧🇦", group:"B", date:"2026-06-12", result:null },
+  { id:"m008", home:"Qatar",        homeFlag:"🇶🇦", away:"Suiza",       awayFlag:"🇨🇭", group:"B", date:"2026-06-13", result:null },
+  { id:"m009", home:"Suiza",        homeFlag:"🇨🇭", away:"Bosnia",      awayFlag:"🇧🇦", group:"B", date:"2026-06-18", result:null },
+  { id:"m010", home:"Canadá",       homeFlag:"🇨🇦", away:"Qatar",       awayFlag:"🇶🇦", group:"B", date:"2026-06-18", result:null },
+  { id:"m011", home:"Suiza",        homeFlag:"🇨🇭", away:"Canadá",      awayFlag:"🇨🇦", group:"B", date:"2026-06-24", result:null },
+  { id:"m012", home:"Bosnia",       homeFlag:"🇧🇦", away:"Qatar",       awayFlag:"🇶🇦", group:"B", date:"2026-06-24", result:null },
+  // ── GRUPO C ──
+  { id:"m013", home:"Brasil",       homeFlag:"🇧🇷", away:"Marruecos",   awayFlag:"🇲🇦", group:"C", date:"2026-06-13", result:null },
+  { id:"m014", home:"Haití",        homeFlag:"🇭🇹", away:"Escocia",     awayFlag:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", group:"C", date:"2026-06-13", result:null },
+  { id:"m015", home:"Escocia",      homeFlag:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", away:"Marruecos",   awayFlag:"🇲🇦", group:"C", date:"2026-06-19", result:null },
+  { id:"m016", home:"Brasil",       homeFlag:"🇧🇷", away:"Haití",       awayFlag:"🇭🇹", group:"C", date:"2026-06-19", result:null },
+  { id:"m017", home:"Escocia",      homeFlag:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", away:"Brasil",      awayFlag:"🇧🇷", group:"C", date:"2026-06-24", result:null },
+  { id:"m018", home:"Marruecos",    homeFlag:"🇲🇦", away:"Haití",       awayFlag:"🇭🇹", group:"C", date:"2026-06-24", result:null },
+  // ── GRUPO D ──
+  { id:"m019", home:"EEUU",         homeFlag:"🇺🇸", away:"Paraguay",    awayFlag:"🇵🇾", group:"D", date:"2026-06-12", result:null },
+  { id:"m020", home:"Australia",    homeFlag:"🇦🇺", away:"Turquía",     awayFlag:"🇹🇷", group:"D", date:"2026-06-13", result:null },
+  { id:"m021", home:"EEUU",         homeFlag:"🇺🇸", away:"Australia",   awayFlag:"🇦🇺", group:"D", date:"2026-06-19", result:null },
+  { id:"m022", home:"Turquía",      homeFlag:"🇹🇷", away:"Paraguay",    awayFlag:"🇵🇾", group:"D", date:"2026-06-19", result:null },
+  { id:"m023", home:"Turquía",      homeFlag:"🇹🇷", away:"EEUU",        awayFlag:"🇺🇸", group:"D", date:"2026-06-25", result:null },
+  { id:"m024", home:"Paraguay",     homeFlag:"🇵🇾", away:"Australia",   awayFlag:"🇦🇺", group:"D", date:"2026-06-25", result:null },
+  // ── GRUPO E ──
+  { id:"m025", home:"Alemania",     homeFlag:"🇩🇪", away:"Curazao",     awayFlag:"🇨🇼", group:"E", date:"2026-06-14", result:null },
+  { id:"m026", home:"Costa de Marfil",homeFlag:"🇨🇮", away:"Ecuador",   awayFlag:"🇪🇨", group:"E", date:"2026-06-14", result:null },
+  { id:"m027", home:"Alemania",     homeFlag:"🇩🇪", away:"Costa de Marfil",awayFlag:"🇨🇮", group:"E", date:"2026-06-20", result:null },
+  { id:"m028", home:"Ecuador",      homeFlag:"🇪🇨", away:"Curazao",     awayFlag:"🇨🇼", group:"E", date:"2026-06-20", result:null },
+  { id:"m029", home:"Ecuador",      homeFlag:"🇪🇨", away:"Alemania",    awayFlag:"🇩🇪", group:"E", date:"2026-06-25", result:null },
+  { id:"m030", home:"Curazao",      homeFlag:"🇨🇼", away:"Costa de Marfil",awayFlag:"🇨🇮", group:"E", date:"2026-06-25", result:null },
+  // ── GRUPO F ──
+  { id:"m031", home:"Países Bajos", homeFlag:"🇳🇱", away:"Japón",       awayFlag:"🇯🇵", group:"F", date:"2026-06-14", result:null },
+  { id:"m032", home:"Suecia",       homeFlag:"🇸🇪", away:"Túnez",       awayFlag:"🇹🇳", group:"F", date:"2026-06-14", result:null },
+  { id:"m033", home:"Países Bajos", homeFlag:"🇳🇱", away:"Suecia",      awayFlag:"🇸🇪", group:"F", date:"2026-06-20", result:null },
+  { id:"m034", home:"Túnez",        homeFlag:"🇹🇳", away:"Japón",       awayFlag:"🇯🇵", group:"F", date:"2026-06-20", result:null },
+  { id:"m035", home:"Japón",        homeFlag:"🇯🇵", away:"Suecia",      awayFlag:"🇸🇪", group:"F", date:"2026-06-25", result:null },
+  { id:"m036", home:"Túnez",        homeFlag:"🇹🇳", away:"Países Bajos",awayFlag:"🇳🇱", group:"F", date:"2026-06-25", result:null },
+  // ── GRUPO G ──
+  { id:"m037", home:"Bélgica",      homeFlag:"🇧🇪", away:"Egipto",      awayFlag:"🇪🇬", group:"G", date:"2026-06-15", result:null },
+  { id:"m038", home:"Irán",         homeFlag:"🇮🇷", away:"Nueva Zelanda",awayFlag:"🇳🇿", group:"G", date:"2026-06-15", result:null },
+  { id:"m039", home:"Bélgica",      homeFlag:"🇧🇪", away:"Irán",        awayFlag:"🇮🇷", group:"G", date:"2026-06-21", result:null },
+  { id:"m040", home:"Nueva Zelanda",homeFlag:"🇳🇿", away:"Egipto",      awayFlag:"🇪🇬", group:"G", date:"2026-06-21", result:null },
+  { id:"m041", home:"Egipto",       homeFlag:"🇪🇬", away:"Irán",        awayFlag:"🇮🇷", group:"G", date:"2026-06-26", result:null },
+  { id:"m042", home:"Nueva Zelanda",homeFlag:"🇳🇿", away:"Bélgica",     awayFlag:"🇧🇪", group:"G", date:"2026-06-26", result:null },
+  // ── GRUPO H ──
+  { id:"m043", home:"España",       homeFlag:"🇪🇸", away:"Cabo Verde",  awayFlag:"🇨🇻", group:"H", date:"2026-06-15", result:null },
+  { id:"m044", home:"Arabia Saudita",homeFlag:"🇸🇦", away:"Uruguay",    awayFlag:"🇺🇾", group:"H", date:"2026-06-15", result:null },
+  { id:"m045", home:"España",       homeFlag:"🇪🇸", away:"Arabia Saudita",awayFlag:"🇸🇦", group:"H", date:"2026-06-21", result:null },
+  { id:"m046", home:"Uruguay",      homeFlag:"🇺🇾", away:"Cabo Verde",  awayFlag:"🇨🇻", group:"H", date:"2026-06-21", result:null },
+  { id:"m047", home:"Cabo Verde",   homeFlag:"🇨🇻", away:"Arabia Saudita",awayFlag:"🇸🇦", group:"H", date:"2026-06-26", result:null },
+  { id:"m048", home:"Uruguay",      homeFlag:"🇺🇾", away:"España",      awayFlag:"🇪🇸", group:"H", date:"2026-06-26", result:null },
+  // ── GRUPO I ──
+  { id:"m049", home:"Francia",      homeFlag:"🇫🇷", away:"Senegal",     awayFlag:"🇸🇳", group:"I", date:"2026-06-16", result:null },
+  { id:"m050", home:"Irak",         homeFlag:"🇮🇶", away:"Noruega",     awayFlag:"🇳🇴", group:"I", date:"2026-06-16", result:null },
+  { id:"m051", home:"Francia",      homeFlag:"🇫🇷", away:"Irak",        awayFlag:"🇮🇶", group:"I", date:"2026-06-22", result:null },
+  { id:"m052", home:"Noruega",      homeFlag:"🇳🇴", away:"Senegal",     awayFlag:"🇸🇳", group:"I", date:"2026-06-22", result:null },
+  { id:"m053", home:"Noruega",      homeFlag:"🇳🇴", away:"Francia",     awayFlag:"🇫🇷", group:"I", date:"2026-06-26", result:null },
+  { id:"m054", home:"Senegal",      homeFlag:"🇸🇳", away:"Irak",        awayFlag:"🇮🇶", group:"I", date:"2026-06-26", result:null },
+  // ── GRUPO J ──
+  { id:"m055", home:"Argentina",    homeFlag:"🇦🇷", away:"Argelia",     awayFlag:"🇩🇿", group:"J", date:"2026-06-16", result:null },
+  { id:"m056", home:"Austria",      homeFlag:"🇦🇹", away:"Jordania",    awayFlag:"🇯🇴", group:"J", date:"2026-06-16", result:null },
+  { id:"m057", home:"Argentina",    homeFlag:"🇦🇷", away:"Austria",     awayFlag:"🇦🇹", group:"J", date:"2026-06-22", result:null },
+  { id:"m058", home:"Jordania",     homeFlag:"🇯🇴", away:"Argelia",     awayFlag:"🇩🇿", group:"J", date:"2026-06-22", result:null },
+  { id:"m059", home:"Jordania",     homeFlag:"🇯🇴", away:"Argentina",   awayFlag:"🇦🇷", group:"J", date:"2026-06-27", result:null },
+  { id:"m060", home:"Argelia",      homeFlag:"🇩🇿", away:"Austria",     awayFlag:"🇦🇹", group:"J", date:"2026-06-27", result:null },
+  // ── GRUPO K ──
+  { id:"m061", home:"Portugal",     homeFlag:"🇵🇹", away:"RD Congo",    awayFlag:"🇨🇩", group:"K", date:"2026-06-17", result:null },
+  { id:"m062", home:"Uzbekistán",   homeFlag:"🇺🇿", away:"Colombia",    awayFlag:"🇨🇴", group:"K", date:"2026-06-17", result:null },
+  { id:"m063", home:"Portugal",     homeFlag:"🇵🇹", away:"Uzbekistán",  awayFlag:"🇺🇿", group:"K", date:"2026-06-23", result:null },
+  { id:"m064", home:"Colombia",     homeFlag:"🇨🇴", away:"RD Congo",    awayFlag:"🇨🇩", group:"K", date:"2026-06-23", result:null },
+  { id:"m065", home:"Colombia",     homeFlag:"🇨🇴", away:"Portugal",    awayFlag:"🇵🇹", group:"K", date:"2026-06-27", result:null },
+  { id:"m066", home:"RD Congo",     homeFlag:"🇨🇩", away:"Uzbekistán",  awayFlag:"🇺🇿", group:"K", date:"2026-06-27", result:null },
+  // ── GRUPO L ──
+  { id:"m067", home:"Inglaterra",   homeFlag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", away:"Croacia",     awayFlag:"🇭🇷", group:"L", date:"2026-06-17", result:null },
+  { id:"m068", home:"Ghana",        homeFlag:"🇬🇭", away:"Panamá",      awayFlag:"🇵🇦", group:"L", date:"2026-06-17", result:null },
+  { id:"m069", home:"Inglaterra",   homeFlag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", away:"Ghana",       awayFlag:"🇬🇭", group:"L", date:"2026-06-23", result:null },
+  { id:"m070", home:"Panamá",       homeFlag:"🇵🇦", away:"Croacia",     awayFlag:"🇭🇷", group:"L", date:"2026-06-23", result:null },
+  { id:"m071", home:"Panamá",       homeFlag:"🇵🇦", away:"Inglaterra",  awayFlag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", group:"L", date:"2026-06-27", result:null },
+  { id:"m072", home:"Croacia",      homeFlag:"🇭🇷", away:"Ghana",       awayFlag:"🇬🇭", group:"L", date:"2026-06-27", result:null },
 ];
 
 // ─────────────────────────────────────────
@@ -804,6 +881,32 @@ function normalizeTeam(name) {
 // ─────────────────────────────────────────
 //  ADMIN — change password
 // ─────────────────────────────────────────
+window.resetMatches = async () => {
+  if (!confirm('¿Seguro? Esto borra los partidos actuales y carga el fixture real del Mundial 2026.')) return;
+  showMsg('reset-msg', '⏳ Cargando...', 'ok');
+  try {
+    // Delete existing matches
+    const snap = await getDocs(collection(db, 'matches'));
+    for (const d of snap.docs) {
+      await setDoc(doc(db, 'matches', d.id), { _delete: true }); // overwrite
+    }
+    // Write all real matches
+    for (const m of INITIAL_MATCHES) {
+      await setDoc(doc(db, 'matches', m.id), m);
+    }
+    // Delete any old match docs not in new list
+    const newIds = new Set(INITIAL_MATCHES.map(m => m.id));
+    for (const d of snap.docs) {
+      if (!newIds.has(d.id)) {
+        await setDoc(doc(db, 'matches', d.id), {});
+      }
+    }
+    showMsg('reset-msg', '✓ Fixture del Mundial 2026 cargado (' + INITIAL_MATCHES.length + ' partidos)', 'ok');
+  } catch(e) {
+    showMsg('reset-msg', 'Error: ' + e.message, 'err');
+  }
+};
+
 window.changeAdminPass = async () => {
   const pass = document.getElementById("new-admin-pass").value.trim();
   if (!pass) { showToast("Ingresá la nueva contraseña"); return; }
