@@ -856,10 +856,7 @@ window.syncResults = async () => {
     let updated = 0;
     for (const m of matches) {
       // Match by team names (fuzzy)
-      const apiMatch = apiMatches.find(am =>
-        normalizeTeam(am.homeTeam.name) === normalizeTeam(m.home) ||
-        normalizeTeam(am.homeTeam.shortName) === normalizeTeam(m.home)
-      );
+      const apiMatch = findMatchInApi(m, apiMatches);
       if (!apiMatch) continue;
       const hs = apiMatch.score?.fullTime?.home;
       const as = apiMatch.score?.fullTime?.away;
@@ -876,11 +873,84 @@ window.syncResults = async () => {
   }
 };
 
+// Mapa de nombres API → nombres en la app
+const TEAM_NAME_MAP = {
+  // API name (lowercase, no spaces) → app name
+  "mexico": "México",
+  "southafrica": "Sudáfrica",
+  "southkorea": "Corea del Sur",
+  "koreapublic": "Corea del Sur",
+  "republicofkorea": "Corea del Sur",
+  "czechia": "Chequia",
+  "czechrepublic": "Chequia",
+  "bosniaandherzegovina": "Bosnia",
+  "bosnia&herzegovina": "Bosnia",
+  "qatar": "Qatar",
+  "switzerland": "Suiza",
+  "canada": "Canadá",
+  "brazil": "Brasil",
+  "morocco": "Marruecos",
+  "haiti": "Haití",
+  "scotland": "Escocia",
+  "unitedstates": "EEUU",
+  "usa": "EEUU",
+  "usmnt": "EEUU",
+  "paraguay": "Paraguay",
+  "australia": "Australia",
+  "turkey": "Turquía",
+  "türkiye": "Turquía",
+  "germany": "Alemania",
+  "curacao": "Curazao",
+  "ivorycoast": "Costa de Marfil",
+  "côtedivoire": "Costa de Marfil",
+  "ecuador": "Ecuador",
+  "netherlands": "Países Bajos",
+  "japan": "Japón",
+  "sweden": "Suecia",
+  "tunisia": "Túnez",
+  "belgium": "Bélgica",
+  "egypt": "Egipto",
+  "iran": "Irán",
+  "newzealand": "Nueva Zelanda",
+  "spain": "España",
+  "capeverde": "Cabo Verde",
+  "caboverde": "Cabo Verde",
+  "saudiarabia": "Arabia Saudita",
+  "uruguay": "Uruguay",
+  "france": "Francia",
+  "senegal": "Senegal",
+  "iraq": "Irak",
+  "norway": "Noruega",
+  "argentina": "Argentina",
+  "algeria": "Argelia",
+  "austria": "Austria",
+  "jordan": "Jordania",
+  "portugal": "Portugal",
+  "drcongo": "RD Congo",
+  "congodr": "RD Congo",
+  "democraticrepublicofthecongo": "RD Congo",
+  "uzbekistan": "Uzbekistán",
+  "colombia": "Colombia",
+  "england": "Inglaterra",
+  "croatia": "Croacia",
+  "ghana": "Ghana",
+  "panama": "Panamá",
+};
+
 function normalizeTeam(name) {
   if (!name) return "";
-  return name.toLowerCase()
-    .replace(/united states|usa/,"eeuu").replace(/netherlands/,"países bajos")
-    .replace(/\s+/g,"").replace(/[^a-záéíóúñ]/g,"");
+  const key = name.toLowerCase().replace(/[^a-z]/g, "");
+  return TEAM_NAME_MAP[key] || name;
+}
+
+function findMatchInApi(appMatch, apiMatches) {
+  const homeApp = appMatch.home;
+  const awayApp = appMatch.away;
+  return apiMatches.find(am => {
+    const homeApi = normalizeTeam(am.homeTeam.name || am.homeTeam.shortName || "");
+    const awayApi = normalizeTeam(am.awayTeam.name || am.awayTeam.shortName || "");
+    return homeApi === homeApp && awayApi === awayApp;
+  });
 }
 
 // ─────────────────────────────────────────
@@ -898,6 +968,14 @@ window.resetMatches = async () => {
     // Write all real matches
     for (const m of INITIAL_MATCHES) {
       await setDoc(doc(db, 'matches', m.id), m);
+    }
+    // Seed known results
+    const knownResults = {
+      'm001': '1', // México 2-0 Sudáfrica
+      'm002': '2', // Corea del Sur 2-1 Chequia
+    };
+    for (const [id, result] of Object.entries(knownResults)) {
+      await updateDoc(doc(db, 'matches', id), { result });
     }
     // Delete any old match docs not in new list
     const newIds = new Set(INITIAL_MATCHES.map(m => m.id));
