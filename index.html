@@ -402,7 +402,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getFirestore, collection, doc, getDoc, getDocs,
-  setDoc, updateDoc, onSnapshot, query, orderBy
+  setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ══════════════════════════════════════════
@@ -614,7 +614,10 @@ async function loadAll() {
 
   onSnapshot(collection(db, "players"), snap => {
     players = {};
-    snap.docs.forEach(d => { players[d.id] = d.data(); });
+    snap.docs.forEach(d => {
+      const data = d.data();
+      if (!data._deleted) players[d.id] = data;
+    });
     renderStandings();
     refreshPlayerSelect();
   });
@@ -1077,16 +1080,24 @@ window.renamePlayer = async () => {
   if (!uid) { showMsg("edit-picks-msg", "Seleccioná un participante primero", "err"); return; }
   if (!newName) { showMsg("edit-picks-msg", "Ingresá el nuevo nombre", "err"); return; }
   await setDoc(doc(db, "players", uid), { name: newName, updatedAt: Date.now() }, { merge: true });
+  // Update local state immediately
+  if (players[uid]) players[uid].name = newName;
   document.getElementById("rename-player-input").value = "";
-  showMsg("edit-picks-msg", "Nombre actualizado a " + newName, "ok");
+  refreshPlayerSelect();
+  // Re-select the same player
+  document.getElementById("edit-player-select").value = uid;
+  renderStandings();
+  showMsg("edit-picks-msg", "✓ Nombre actualizado a \"" + newName + "\"", "ok");
 };
 
 window.deletePlayer = async () => {
   const uid = document.getElementById("edit-player-select").value;
   const pname = players[uid]?.name || uid;
   if (!uid) { showMsg("edit-picks-msg", "Seleccioná un participante primero", "err"); return; }
-  if (!confirm("Eliminar a " + pname + " y todos sus picks?")) return;
-  await setDoc(doc(db, "players", uid), { _deleted: true, name: pname });
+  if (!confirm("¿Eliminar a " + pname + " y todos sus picks?")) return;
+  // Delete player document
+  await deleteDoc(doc(db, "players", uid));
+  // Remove their votes from all matches
   const votesSnap = await getDocs(collection(db, "votes"));
   for (const vdoc of votesSnap.docs) {
     const data = vdoc.data();
@@ -1095,10 +1106,15 @@ window.deletePlayer = async () => {
       await setDoc(doc(db, "votes", vdoc.id), data);
     }
   }
+  // Update local state immediately
+  delete players[uid];
+  delete allVotes[uid];
   document.getElementById("edit-player-select").value = "";
   document.getElementById("edit-picks-list").innerHTML = "";
   document.getElementById("rename-player-row").style.display = "none";
-  showMsg("edit-picks-msg", pname + " eliminado", "ok");
+  refreshPlayerSelect();
+  renderStandings();
+  showMsg("edit-picks-msg", "✓ " + pname + " eliminado", "ok");
 };
 
 window.setPickForPlayer = async (uid, matchId, pick) => {
