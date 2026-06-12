@@ -1052,12 +1052,12 @@ window.loadPlayerPicks = function() {
       const cls = isSel ? colSel[v] : "";
       const lbl = v === "1" ? m.home : v === "X" ? "Empate" : m.away;
       out += '<button class="vote-btn btn-sm ' + cls + '" style="flex:none;padding:5px 10px;font-size:12px" '
-           + 'onclick="setPickForPlayer('' + uid + '','' + m.id + '','' + v + '')">'
+           + 'onclick="setPickForPlayer(\'' + uid + '\',\'' + m.id + '\',\'' + v + '\')">'
            + v + ' <span style="font-size:10px;color:var(--text-dim)">' + lbl + '</span></button>';
     }
     if (pick) {
       out += '<button class="vote-btn btn-sm" style="flex:none;padding:5px 8px;font-size:11px;color:var(--red);border-color:var(--red)" '
-           + 'onclick="setPickForPlayer('' + uid + '','' + m.id + '','')">✕</button>';
+           + 'onclick="setPickForPlayer(\'' + uid + '\',\'' + m.id + '\',\'\')">✕</button>';
     }
     out += '</div></div>';
   }
