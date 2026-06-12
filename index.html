@@ -812,6 +812,10 @@ window.saveApiToken = async () => {
   checkApiStatus(token);
 };
 
+// CORS proxy helper — football-data.org bloquea llamadas directas desde browser
+const PROXY = "https://corsproxy.io/?";
+function apiUrl(url) { return PROXY + encodeURIComponent(url); }
+
 async function checkApiStatus(token) {
   if (!token) {
     const snap = await getDoc(doc(db, "config", "api"));
@@ -820,13 +824,14 @@ async function checkApiStatus(token) {
   const badge = document.getElementById("api-status-badge");
   if (!token) { badge.className = "api-status err"; badge.innerHTML = '<div class="dot"></div>Sin token'; return; }
   try {
-    const r = await fetch("https://api.football-data.org/v4/competitions/WC/matches?season=2026&matchday=1", {
+    const r = await fetch(apiUrl("https://api.football-data.org/v4/competitions/WC"), {
       headers: { "X-Auth-Token": token }
     });
     if (r.ok) { badge.className = "api-status ok"; badge.innerHTML = '<div class="dot"></div>Conectada ✓'; }
-    else { badge.className = "api-status err"; badge.innerHTML = '<div class="dot"></div>Token inválido'; }
-  } catch {
-    badge.className = "api-status err"; badge.innerHTML = '<div class="dot"></div>Error de red';
+    else if (r.status === 403) { badge.className = "api-status err"; badge.innerHTML = '<div class="dot"></div>Token inválido (verificá el email)'; }
+    else { badge.className = "api-status err"; badge.innerHTML = '<div class="dot"></div>Error ' + r.status; }
+  } catch(e) {
+    badge.className = "api-status err"; badge.innerHTML = '<div class="dot"></div>Error de red: ' + e.message;
   }
 }
 
@@ -841,7 +846,7 @@ window.syncResults = async () => {
 
   try {
     // Football-data.org: WC 2026
-    const r = await fetch("https://api.football-data.org/v4/competitions/WC/matches?season=2026&status=FINISHED", {
+    const r = await fetch(apiUrl("https://api.football-data.org/v4/competitions/WC/matches?season=2026&status=FINISHED"), {
       headers: { "X-Auth-Token": token }
     });
     if (!r.ok) { showMsg("api-msg", `Error API: ${r.status}`, "err"); return; }
