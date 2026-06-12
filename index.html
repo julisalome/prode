@@ -344,6 +344,17 @@
       </div>
 
       <div class="admin-card">
+        <h3>📅 Cargar resultados ya jugados</h3>
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px">Carga de una vez todos los partidos con resultado conocido hasta hoy. Útil si empezaste el prode tarde.</p>
+        <div id="known-results-list" style="max-height:320px;overflow-y:auto"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-gold btn-sm" onclick="applyKnownResults()">✅ Aplicar todos los resultados conocidos</button>
+          <span id="known-results-count" style="font-size:12px;color:var(--text-dim)"></span>
+        </div>
+        <div id="known-msg"></div>
+      </div>
+
+      <div class="admin-card">
         <h3>Resultados manuales</h3>
         <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Si la API no tiene el resultado, podés cargarlo a mano.</p>
         <div id="admin-matches-list"><div class="loading"><div class="spinner"></div></div></div>
@@ -954,6 +965,52 @@ function findMatchInApi(appMatch, apiMatches) {
 }
 
 // ─────────────────────────────────────────
+//  KNOWN RESULTS — Última actualización: 12 Jun 2026
+// ─────────────────────────────────────────
+const KNOWN_RESULTS = [
+  { id: "m001", result: "1" }, // México 2-0 Sudáfrica
+  { id: "m002", result: "2" }, // Corea del Sur 2-1 Chequia
+];
+
+function renderKnownResults() {
+  const el = document.getElementById("known-results-list");
+  if (!el || !matches.length) return;
+  const countEl = document.getElementById("known-results-count");
+  const labels = { "1": "Gana local", "X": "Empate", "2": "Gana visitante" };
+  const colMap = { "1": "var(--green)", "X": "var(--gold)", "2": "var(--red)" };
+  let out = "";
+  for (const kr of KNOWN_RESULTS) {
+    const m = matches.find(x => x.id === kr.id);
+    const label = m ? (m.home + " vs " + m.away) : kr.id;
+    const done = m && m.result === kr.result;
+    const col = colMap[kr.result];
+    out += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">'
+         + '<div style="flex:1;font-size:13px;min-width:160px">' + label + '</div>'
+         + '<div style="font-weight:700;font-size:13px;color:' + col + '">' + kr.result + ' — ' + labels[kr.result] + '</div>'
+         + (done ? '<div style="font-size:11px;color:var(--green)">✓ ya cargado</div>' : "")
+         + "</div>";
+  }
+  el.innerHTML = out || '<p style="font-size:13px;color:var(--text-dim)">Sin resultados conocidos aún.</p>';
+  if (countEl) {
+    const pending = KNOWN_RESULTS.filter(kr => { const m = matches.find(x => x.id === kr.id); return !m || m.result !== kr.result; }).length;
+    countEl.textContent = pending + " por cargar, " + (KNOWN_RESULTS.length - pending) + " ya cargados";
+  }
+}
+
+window.applyKnownResults = async () => {
+  let applied = 0;
+  showMsg("known-msg", "⏳ Aplicando...", "ok");
+  for (const kr of KNOWN_RESULTS) {
+    const m = matches.find(x => x.id === kr.id);
+    if (!m || m.result === kr.result) continue;
+    await updateDoc(doc(db, "matches", kr.id), { result: kr.result });
+    applied++;
+  }
+  showMsg("known-msg", "✓ " + applied + " resultado(s) aplicado(s)", "ok");
+  renderKnownResults();
+};
+
+// ─────────────────────────────────────────
 //  ADMIN — change password
 // ─────────────────────────────────────────
 window.resetMatches = async () => {
@@ -1007,7 +1064,7 @@ window.showTab = (id, btn) => {
   btn.classList.add("active");
   if (id === "tab-standings") renderStandings();
   if (id === "tab-myvotes") renderMyVotes();
-  if (id === "tab-admin") { renderAdminMatches(); checkApiStatus(null); }
+  if (id === "tab-admin") { renderAdminMatches(); checkApiStatus(null); renderKnownResults(); }
 };
 
 function formatDate(d) {
