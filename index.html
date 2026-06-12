@@ -830,8 +830,17 @@ function renderAdminMatches() {
 
 window.setResult = async (matchId, result) => {
   const ref = doc(db, "matches", matchId);
+  // Update Firestore
   await updateDoc(ref, { result: result || null });
-  showToast(result ? `Resultado guardado: ${result}` : "Resultado borrado");
+  // Update local matches array immediately so UI reflects change without waiting for snapshot
+  const idx = matches.findIndex(m => m.id === matchId);
+  if (idx !== -1) {
+    matches[idx].result = result || null;
+    renderMatches();
+    renderStandings();
+    renderMyVotes();
+  }
+  showToast(result ? `Resultado guardado: ${result} ✓` : "Resultado borrado");
 };
 
 // ─────────────────────────────────────────
