@@ -823,7 +823,7 @@ function renderStandings() {
 // ─────────────────────────────────────────
 //  PROGRESSION CHART (SVG, sin librerías)
 // ─────────────────────────────────────────
-const PLAYER_COLORS = ["#f5c518","#00c853","#ff3d3d","#4dabf7","#da77f2","#ff922b","#69db7c","#e64980","#74c0fc","#ffd43b","#9775fa","#ff6b6b"];
+const PLAYER_COLORS = ["#f5c518","#00c853","#ff3d3d","#4dabf7","#da77f2","#ff922b","#69db7c","#e64980","#74c0fc","#ffd43b","#9775fa","#ff6b6b","#20c997","#fd7e14","#748ffc"];
 
 function renderProgressionChart(sortedScores, resolvedMatches) {
   const section = document.getElementById("progression-section");
@@ -859,18 +859,40 @@ function renderProgressionChart(sortedScores, resolvedMatches) {
   const stepX = isMobile ? 38 : 52;
   const padL = 36, padR = 16, padT = 16, padB = 32;
   const chartW = Math.max(280, (numPoints - 1) * stepX);
-  const chartH = 220;
+  const chartH = 260;
   const W = chartW + padL + padR;
   const H = chartH + padT + padB;
 
   const xFor = i => padL + (i / (numPoints - 1)) * chartW;
-  const yFor = v => padT + chartH - (v / maxPts) * chartH;
+  const yForRaw = v => padT + chartH - (v / maxPts) * chartH;
+
+  // ── Jitter: separar visualmente líneas que comparten el mismo valor en el mismo punto ──
+  // Para cada índice de punto, agrupar series por su valor y asignar un pequeño offset vertical
+  const JITTER_PX = 4; // separación entre líneas superpuestas
+  const offsets = series.map(() => new Array(numPoints).fill(0));
+  for (let i = 0; i < numPoints; i++) {
+    const groups = {}; // valor → [seriesIdx,...]
+    series.forEach((s, si) => {
+      const v = s.points[i];
+      (groups[v] = groups[v] || []).push(si);
+    });
+    for (const v in groups) {
+      const idxs = groups[v];
+      const n = idxs.length;
+      if (n <= 1) continue;
+      // Centrar el grupo: offsets simétricos alrededor de 0
+      idxs.forEach((si, k) => {
+        offsets[si][i] = (k - (n - 1) / 2) * JITTER_PX;
+      });
+    }
+  }
+  const yFor = (v, seriesIdx, pointIdx) => yForRaw(v) + offsets[seriesIdx][pointIdx];
 
   // Grid lines horizontales (líneas de puntaje entero)
   let gridLines = "";
   const gridStep = maxPts <= 6 ? 1 : Math.ceil(maxPts / 6);
   for (let v = 0; v <= maxPts; v += gridStep) {
-    const y = yFor(v);
+    const y = yForRaw(v);
     gridLines += `<line x1="${padL}" y1="${y}" x2="${padL+chartW}" y2="${y}" stroke="var(--border)" stroke-width="1" />`;
     gridLines += `<text x="${padL-8}" y="${y+4}" font-size="11" fill="var(--text-dim)" text-anchor="end">${v}</text>`;
   }
@@ -885,17 +907,17 @@ function renderProgressionChart(sortedScores, resolvedMatches) {
     xLabels += `<text x="${x}" y="${padT+chartH+18}" font-size="10" fill="var(--text-dim)" text-anchor="middle">${d}/${mo}</text>`;
   }
 
-  // Líneas de cada jugador
+  // Líneas de cada jugador (con jitter aplicado)
   let lines = "";
   let dots = "";
-  for (const s of series) {
-    const pathPoints = s.points.map((v,i) => `${xFor(i)},${yFor(v)}`).join(" ");
+  series.forEach((s, si) => {
+    const pathPoints = s.points.map((v,i) => `${xFor(i)},${yFor(v, si, i)}`).join(" ");
     lines += `<polyline points="${pathPoints}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.9" />`;
-    // Punto final con etiqueta de nombre
+    // Punto final
     const lastI = s.points.length - 1;
-    const lx = xFor(lastI), ly = yFor(s.points[lastI]);
-    dots += `<circle cx="${lx}" cy="${ly}" r="4" fill="${s.color}" />`;
-  }
+    const lx = xFor(lastI), ly = yFor(s.points[lastI], si, lastI);
+    dots += `<circle cx="${lx}" cy="${ly}" r="4" fill="${s.color}" stroke="var(--surface)" stroke-width="1.5" />`;
+  });
 
   // Leyenda
   let legend = `<div style="display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">`;
