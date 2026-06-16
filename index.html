@@ -377,7 +377,7 @@
     <div id="tab-standings" class="tab-content active">
       <div class="section-title" style="justify-content:space-between">
         <span>🏅 Tabla de posiciones</span>
-        <button class="btn btn-outline btn-sm" onclick="exportStandingsImage()" id="export-btn">📤 Exportar</button>
+        <button class="btn btn-outline btn-sm" onclick="exportStandingsImage()" id="export-btn">📤 Compartir</button>
       </div>
       <div id="standings-table-capture">
         <div id="standings-container"><div class="loading"><div class="spinner"></div><br>Calculando...</div></div>
@@ -862,12 +862,7 @@ function renderBadges(sortedScores, resolvedMatches) {
   const chronological = [...resolvedMatches].sort((a,b) => (a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
   const badges = [];
 
-  // ── 1. Líder actual ──
-  if (sortedScores[0][1].pts > 0) {
-    badges.push({ icon: "👑", title: "Puntero", player: sortedScores[0][1].name, desc: `${sortedScores[0][1].pts} aciertos` });
-  }
-
-  // ── 2. Racha más larga de aciertos consecutivos ──
+  // ── 1. Racha más larga de aciertos consecutivos ──
   let bestStreak = { uid: null, len: 0 };
   for (const [uid, s] of sortedScores) {
     let cur = 0, best = 0;
@@ -1608,7 +1603,7 @@ window.closeModal = (e) => {
 };
 
 // ─────────────────────────────────────────
-//  EXPORT STANDINGS AS IMAGE
+//  COMPARTIR TABLA COMO IMAGEN
 // ─────────────────────────────────────────
 window.exportStandingsImage = async () => {
   const btn = document.getElementById("export-btn");
@@ -1622,14 +1617,31 @@ window.exportStandingsImage = async () => {
       scale: 2,
       useCORS: true
     });
-    const link = document.createElement("a");
     const today = new Date().toISOString().slice(0,10);
-    link.download = `prode-mundial-2026-tabla-${today}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-    showToast("✓ Imagen descargada");
+    const filename = `prode-mundial-2026-tabla-${today}.png`;
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+    const file = new File([blob], filename, { type: "image/png" });
+
+    // Web Share API con archivos (funciona en mobile: Android/iOS Safari/Chrome)
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: "Prode Mundial 2026",
+        text: "📊 Tabla de posiciones del prode"
+      });
+    } else {
+      // Fallback en desktop: descarga directa
+      const link = document.createElement("a");
+      link.download = filename;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+      showToast("✓ Imagen descargada (tu navegador no soporta compartir directo)");
+    }
   } catch (e) {
-    showToast("Error al exportar: " + e.message);
+    if (e.name !== "AbortError") {
+      showToast("Error: " + e.message);
+    }
   } finally {
     btn.textContent = original;
     btn.disabled = false;
