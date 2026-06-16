@@ -276,6 +276,58 @@
     .pick-wrong   { background: #1a0d0d; color: var(--red); }
     .pick-none    { background: var(--surface2); color: var(--text-dim); }
 
+    /* ── STATS TAB: H2H, HEATMAP ── */
+    .h2h-row {
+      display: flex; align-items: center; gap: 10px; padding: 10px 0;
+      border-bottom: 1px solid var(--border); flex-wrap: wrap;
+    }
+    .h2h-row:last-child { border-bottom: none; }
+    .h2h-teams { flex: 1; font-size: 13px; min-width: 140px; }
+    .h2h-pick { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; min-width: 50px; text-align: center; }
+    .h2h-summary {
+      display: flex; gap: 12px; margin-bottom: 16px;
+    }
+    .h2h-summary-card {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px; text-align: center;
+    }
+    .heatmap-table { border-collapse: collapse; font-size: 11px; }
+    .heatmap-table th {
+      padding: 6px 8px; color: var(--text-dim); font-weight: 600;
+      text-align: center; white-space: nowrap;
+    }
+    .heatmap-table th.player-col { text-align: left; position: sticky; left: 0; background: var(--surface); }
+    .heatmap-cell {
+      width: 32px; height: 32px; text-align: center; border-radius: 4px;
+      font-weight: 700; font-size: 11px;
+    }
+    .heatmap-name { font-size: 12px; font-weight: 600; padding-right: 12px; white-space: nowrap; position: sticky; left: 0; background: var(--surface); }
+    .easyhard-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 18px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .easyhard-icon { font-size: 24px; }
+    .easyhard-info { flex: 1; }
+    .easyhard-match { font-size: 13px; font-weight: 600; }
+    .easyhard-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+    /* ── TODAY SUMMARY / PENDING REMINDER ── */
+    .today-card {
+      background: linear-gradient(135deg, rgba(245,197,24,.08), rgba(245,197,24,.02));
+      border: 1px solid rgba(245,197,24,.3);
+      border-radius: 14px; padding: 14px 18px; margin-bottom: 14px;
+    }
+    .today-card-title { font-size: 13px; font-weight: 700; color: var(--gold); margin-bottom: 8px; }
+    .today-match-item { font-size: 13px; color: var(--text); padding: 3px 0; }
+    .today-match-item .t { color: var(--text-dim); margin-right: 6px; }
+    .pending-card {
+      background: rgba(255,61,61,.08); border: 1px solid rgba(255,61,61,.3);
+      border-radius: 14px; padding: 12px 18px; margin-bottom: 14px;
+      font-size: 13px; color: var(--red); font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+    }
+
     /* ── BADGES ── */
     .badge-card {
       background: var(--surface); border: 1px solid var(--border);
@@ -362,6 +414,7 @@
     <button onclick="showTab('tab-matches', this)">🗓 Partidos</button>
     <button class="active" onclick="showTab('tab-standings', this)">🏅 Tabla</button>
     <button onclick="showTab('tab-myvotes', this)">📋 Mis Picks</button>
+    <button onclick="showTab('tab-stats', this)">📊 Stats</button>
     <button id="admin-tab-btn" style="display:none" onclick="showTab('tab-admin', this)">⚙️ Admin</button>
   </nav>
 
@@ -370,6 +423,8 @@
     <!-- MATCHES TAB -->
     <div id="tab-matches" class="tab-content">
       <div class="section-title">🗓 Partidos</div>
+      <div id="today-summary"></div>
+      <div id="pending-reminder"></div>
       <div id="matches-list"><div class="loading"><div class="spinner"></div><br>Cargando partidos...</div></div>
     </div>
 
@@ -396,6 +451,27 @@
     <div id="tab-myvotes" class="tab-content">
       <div class="section-title">📋 Mis pronósticos</div>
       <div id="myvotes-container"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- STATS TAB -->
+    <div id="tab-stats" class="tab-content">
+      <div class="section-title">⚔️ Head to Head</div>
+      <div id="h2h-selectors" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+        <select id="h2h-player1" class="result-select" style="flex:1;min-width:140px" onchange="renderHeadToHead()">
+          <option value="">— Jugador 1 —</option>
+        </select>
+        <span style="color:var(--text-dim);font-weight:700">VS</span>
+        <select id="h2h-player2" class="result-select" style="flex:1;min-width:140px" onchange="renderHeadToHead()">
+          <option value="">— Jugador 2 —</option>
+        </select>
+      </div>
+      <div id="h2h-container"></div>
+
+      <div class="section-title" style="margin-top:32px">🔥 Mapa de calor</div>
+      <div id="heatmap-container" style="overflow-x:auto"></div>
+
+      <div class="section-title" style="margin-top:32px">🎯 Fácil vs difícil</div>
+      <div id="easyhard-container"></div>
     </div>
 
     <!-- ADMIN TAB -->
@@ -711,9 +787,53 @@ async function loadAll() {
 // ─────────────────────────────────────────
 //  RENDER MATCHES
 // ─────────────────────────────────────────
+// ─────────────────────────────────────────
+//  RESUMEN DEL DÍA + RECORDATORIO DE PENDIENTES
+// ─────────────────────────────────────────
+function todayDateStr() {
+  // Hora Argentina (UTC-3)
+  const now = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  return now.toISOString().slice(0, 10);
+}
+
+function renderTodaySummary() {
+  const el = document.getElementById("today-summary");
+  if (!el) return;
+  const today = todayDateStr();
+  const todayMatches = matches.filter(m => m.date === today).sort((a,b) => (a.time||"").localeCompare(b.time||""));
+
+  if (!todayMatches.length) { el.innerHTML = ""; return; }
+
+  const items = todayMatches.map(m =>
+    `<div class="today-match-item"><span class="t">${m.time || "--:--"}</span>${m.homeFlag} ${m.home} vs ${m.away} ${m.awayFlag}</div>`
+  ).join("");
+
+  el.innerHTML = `<div class="today-card">
+    <div class="today-card-title">📅 Hoy se juegan ${todayMatches.length} partido${todayMatches.length > 1 ? "s" : ""}</div>
+    ${items}
+  </div>`;
+}
+
+function renderPendingReminder() {
+  const el = document.getElementById("pending-reminder");
+  if (!el) return;
+  const today = todayDateStr();
+  // Partidos de hoy que todavía no arrancaron y no tienen pick
+  const pendingToday = matches.filter(m => m.date === today && !matchHasStarted(m) && !votes[m.id]);
+
+  if (!pendingToday.length) { el.innerHTML = ""; return; }
+
+  el.innerHTML = `<div class="pending-card">
+    ⚠️ Te falta${pendingToday.length > 1 ? "n" : ""} ${pendingToday.length} pick${pendingToday.length > 1 ? "s" : ""} para hoy — votá antes de que arranquen
+  </div>`;
+}
+
 function renderMatches() {
   const el = document.getElementById("matches-list");
   if (!matches.length) { el.innerHTML = '<div class="loading">Sin partidos</div>'; return; }
+
+  renderTodaySummary();
+  renderPendingReminder();
 
   let html = "";
   let lastDate = null;
@@ -1365,14 +1485,28 @@ function renderKnownResults() {
 // ─────────────────────────────────────────
 function refreshPlayerSelect() {
   const sel = document.getElementById("edit-player-select");
-  if (!sel) return;
-  // Clear except placeholder
-  while (sel.options.length > 1) sel.remove(1);
-  for (const [uid, pdata] of Object.entries(players)) {
-    const opt = document.createElement("option");
-    opt.value = uid;
-    opt.textContent = pdata.name;
-    sel.appendChild(opt);
+  if (sel) {
+    while (sel.options.length > 1) sel.remove(1);
+    for (const [uid, pdata] of Object.entries(players)) {
+      const opt = document.createElement("option");
+      opt.value = uid;
+      opt.textContent = pdata.name;
+      sel.appendChild(opt);
+    }
+  }
+  // También poblar los selectores de Head to Head
+  for (const selId of ["h2h-player1", "h2h-player2"]) {
+    const s = document.getElementById(selId);
+    if (!s) continue;
+    const currentVal = s.value;
+    while (s.options.length > 1) s.remove(1);
+    for (const [uid, pdata] of Object.entries(players)) {
+      const opt = document.createElement("option");
+      opt.value = uid;
+      opt.textContent = pdata.name;
+      s.appendChild(opt);
+    }
+    if (currentVal && players[currentVal]) s.value = currentVal;
   }
 }
 
@@ -1669,6 +1803,190 @@ window.exportStandingsImage = async () => {
   }
 };
 
+// ─────────────────────────────────────────
+//  HEAD TO HEAD
+// ─────────────────────────────────────────
+window.renderHeadToHead = () => {
+  const uid1 = document.getElementById("h2h-player1")?.value;
+  const uid2 = document.getElementById("h2h-player2")?.value;
+  const container = document.getElementById("h2h-container");
+  if (!container) return;
+
+  if (!uid1 || !uid2) {
+    container.innerHTML = '<p style="color:var(--text-dim);font-size:13px;text-align:center;padding:20px 0">Elegí dos jugadores para comparar</p>';
+    return;
+  }
+  if (uid1 === uid2) {
+    container.innerHTML = '<p style="color:var(--text-dim);font-size:13px;text-align:center;padding:20px 0">Elegí dos jugadores distintos</p>';
+    return;
+  }
+
+  const name1 = players[uid1]?.name || uid1;
+  const name2 = players[uid2]?.name || uid2;
+  const resolvedMatches = matches.filter(m => m.result || matchHasStarted(m));
+  const ordered = [...resolvedMatches].sort((a,b) => (b.date+(b.time||"")).localeCompare(a.date+(a.time||"")));
+
+  let agreed = 0, disagreed = 0, p1Better = 0, p2Better = 0;
+  let rows = "";
+
+  for (const m of ordered) {
+    const pick1 = (allVotes[m.id] || {})[uid1];
+    const pick2 = (allVotes[m.id] || {})[uid2];
+    if (!pick1 && !pick2) continue;
+
+    const sameVote = pick1 && pick2 && pick1 === pick2;
+    if (m.result && pick1 && pick2) {
+      if (sameVote) agreed++;
+      else {
+        disagreed++;
+        const ok1 = pick1 === m.result, ok2 = pick2 === m.result;
+        if (ok1 && !ok2) p1Better++;
+        if (ok2 && !ok1) p2Better++;
+      }
+    }
+
+    const label = v => v === "1" ? "1 " + m.home : v === "X" ? "X" : v === "2" ? "2 " + m.away : "—";
+    let cls1 = "background:var(--surface2);color:var(--text-dim)";
+    let cls2 = "background:var(--surface2);color:var(--text-dim)";
+    if (m.result) {
+      if (pick1) cls1 = pick1 === m.result ? "background:#0d3321;color:var(--green)" : "background:#1a0d0d;color:var(--red)";
+      if (pick2) cls2 = pick2 === m.result ? "background:#0d3321;color:var(--green)" : "background:#1a0d0d;color:var(--red)";
+    } else {
+      if (pick1) cls1 = "background:var(--surface2);color:var(--gold);border:1px solid var(--gold)";
+      if (pick2) cls2 = "background:var(--surface2);color:var(--gold);border:1px solid var(--gold)";
+    }
+
+    rows += `<div class="h2h-row">
+      <div class="h2h-teams">${m.homeFlag} ${m.home} vs ${m.away} ${m.awayFlag}${!sameVote && pick1 && pick2 ? ' <span style="color:var(--gold)">⚡</span>' : ''}</div>
+      <span class="h2h-pick" style="${cls1}">${label(pick1)}</span>
+      <span class="h2h-pick" style="${cls2}">${label(pick2)}</span>
+    </div>`;
+  }
+
+  const summary = `<div class="h2h-summary">
+    <div class="h2h-summary-card"><div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--gold)">${agreed}</div><div style="font-size:11px;color:var(--text-dim)">Coincidieron</div></div>
+    <div class="h2h-summary-card"><div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--green)">${p1Better}</div><div style="font-size:11px;color:var(--text-dim)">${name1} ganó el duelo</div></div>
+    <div class="h2h-summary-card"><div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--red)">${p2Better}</div><div style="font-size:11px;color:var(--text-dim)">${name2} ganó el duelo</div></div>
+  </div>`;
+
+  container.innerHTML = summary + (rows ? `<div>${rows}</div>` : '<p style="color:var(--text-dim);font-size:13px;text-align:center;padding:12px 0">Todavía no hay partidos con picks de ambos</p>');
+};
+
+// ─────────────────────────────────────────
+//  MAPA DE CALOR
+// ─────────────────────────────────────────
+function renderHeatmap() {
+  const container = document.getElementById("heatmap-container");
+  if (!container) return;
+  const resolvedMatches = matches.filter(m => m.result);
+  if (!resolvedMatches.length || !Object.keys(players).length) {
+    container.innerHTML = '<p style="color:var(--text-dim);font-size:13px">Todavía no hay partidos con resultado.</p>';
+    return;
+  }
+
+  const chronological = [...resolvedMatches].sort((a,b) => (a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
+  // Agrupar por día
+  const days = [...new Set(chronological.map(m => m.date))];
+
+  let header = '<tr><th class="player-col">Jugador</th>';
+  for (const d of days) {
+    const [, mo, dd] = d.split("-");
+    header += `<th>${dd}/${mo}</th>`;
+  }
+  header += '<th>Total</th></tr>';
+
+  // Ordenar jugadores por puntaje total desc
+  const playerEntries = Object.entries(players).map(([uid, p]) => {
+    let total = 0;
+    const dayResults = days.map(d => {
+      const dayMatches = chronological.filter(m => m.date === d);
+      let correct = 0, played = 0;
+      for (const m of dayMatches) {
+        const pick = (allVotes[m.id] || {})[uid];
+        if (pick) { played++; if (pick === m.result) { correct++; total++; } }
+      }
+      return { correct, played };
+    });
+    return { uid, name: p.name, dayResults, total };
+  }).sort((a,b) => b.total - a.total);
+
+  let rows = "";
+  for (const pe of playerEntries) {
+    rows += `<tr><td class="heatmap-name">${pe.name}</td>`;
+    for (const dr of pe.dayResults) {
+      let bg = "rgba(255,255,255,.03)", color = "var(--text-dim)", txt = "—";
+      if (dr.played > 0) {
+        const ratio = dr.correct / dr.played;
+        txt = dr.correct + "/" + dr.played;
+        if (ratio >= 0.75) { bg = "rgba(0,200,83,.35)"; color = "#7fffb0"; }
+        else if (ratio >= 0.4) { bg = "rgba(245,197,24,.3)"; color = "#ffe27a"; }
+        else { bg = "rgba(255,61,61,.3)"; color = "#ff9d9d"; }
+      }
+      rows += `<td><div class="heatmap-cell" style="background:${bg};color:${color}">${txt}</div></td>`;
+    }
+    rows += `<td style="text-align:center;font-weight:700;color:var(--gold)">${pe.total}</td></tr>`;
+  }
+
+  container.innerHTML = `<table class="heatmap-table"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
+}
+
+// ─────────────────────────────────────────
+//  PARTIDO MÁS FÁCIL / MÁS DIFÍCIL
+// ─────────────────────────────────────────
+function renderEasyHard() {
+  const container = document.getElementById("easyhard-container");
+  if (!container) return;
+  const resolvedMatches = matches.filter(m => m.result);
+  const totalPlayers = Object.keys(players).length;
+
+  if (resolvedMatches.length < 3 || totalPlayers < 3) {
+    container.innerHTML = '<p style="color:var(--text-dim);font-size:13px">Hacen falta más partidos jugados para calcular esto.</p>';
+    return;
+  }
+
+  const withRatio = resolvedMatches.map(m => {
+    const mv = allVotes[m.id] || {};
+    const voters = Object.keys(mv).length;
+    const correct = Object.values(mv).filter(p => p === m.result).length;
+    const ratio = voters > 0 ? correct / voters : 0;
+    return { m, voters, correct, ratio };
+  }).filter(x => x.voters >= 2);
+
+  if (!withRatio.length) {
+    container.innerHTML = '<p style="color:var(--text-dim);font-size:13px">Sin suficientes votos para calcular esto.</p>';
+    return;
+  }
+
+  const easiest = [...withRatio].sort((a,b) => b.ratio - a.ratio)[0];
+  const hardest = [...withRatio].sort((a,b) => a.ratio - b.ratio)[0];
+
+  const resultLabel = m => m.result === "1" ? "1 " + m.home : m.result === "X" ? "Empate" : "2 " + m.away;
+
+  container.innerHTML = `
+    <div class="easyhard-card">
+      <div class="easyhard-icon">😴</div>
+      <div class="easyhard-info">
+        <div class="easyhard-match">${easiest.m.homeFlag} ${easiest.m.home} vs ${easiest.m.away} ${easiest.m.awayFlag}</div>
+        <div class="easyhard-desc">El más fácil: ${easiest.correct}/${easiest.voters} acertaron (${Math.round(easiest.ratio*100)}%) — terminó ${resultLabel(easiest.m)}</div>
+      </div>
+    </div>
+    <div class="easyhard-card">
+      <div class="easyhard-icon">😱</div>
+      <div class="easyhard-info">
+        <div class="easyhard-match">${hardest.m.homeFlag} ${hardest.m.home} vs ${hardest.m.away} ${hardest.m.awayFlag}</div>
+        <div class="easyhard-desc">El más sorpresivo: solo ${hardest.correct}/${hardest.voters} acertaron (${Math.round(hardest.ratio*100)}%) — terminó ${resultLabel(hardest.m)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderStatsTab() {
+  refreshPlayerSelect();
+  renderHeadToHead();
+  renderHeatmap();
+  renderEasyHard();
+}
+
 window.showTab = (id, btn) => {
   document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
   document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
@@ -1676,6 +1994,7 @@ window.showTab = (id, btn) => {
   btn.classList.add("active");
   if (id === "tab-standings") renderStandings();
   if (id === "tab-myvotes") renderMyVotes();
+  if (id === "tab-stats") renderStatsTab();
   if (id === "tab-admin") { renderAdminMatches(); checkApiStatus(null); renderKnownResults(); refreshPlayerSelect(); }
 };
 
