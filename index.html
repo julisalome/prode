@@ -276,6 +276,21 @@
     .pick-wrong   { background: #1a0d0d; color: var(--red); }
     .pick-none    { background: var(--surface2); color: var(--text-dim); }
 
+    /* ── BADGES ── */
+    .badge-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px; display: flex; gap: 12px; align-items: center;
+    }
+    .badge-icon {
+      font-size: 28px; flex-shrink: 0; width: 44px; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--surface2); border-radius: 10px;
+    }
+    .badge-info { flex: 1; min-width: 0; }
+    .badge-title { font-size: 13px; font-weight: 700; color: var(--gold); }
+    .badge-player { font-size: 13px; font-weight: 600; margin-top: 1px; }
+    .badge-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
     /* ── TOAST ── */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -304,6 +319,7 @@
       .team-name { font-size: 11px; }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -359,8 +375,17 @@
 
     <!-- STANDINGS TAB -->
     <div id="tab-standings" class="tab-content active">
-      <div class="section-title">🏅 Tabla de posiciones</div>
-      <div id="standings-container"><div class="loading"><div class="spinner"></div><br>Calculando...</div></div>
+      <div class="section-title" style="justify-content:space-between">
+        <span>🏅 Tabla de posiciones</span>
+        <button class="btn btn-outline btn-sm" onclick="exportStandingsImage()" id="export-btn">📤 Exportar</button>
+      </div>
+      <div id="standings-table-capture">
+        <div id="standings-container"><div class="loading"><div class="spinner"></div><br>Calculando...</div></div>
+      </div>
+      <div id="badges-section" style="display:none;margin-top:28px">
+        <div class="section-title" style="font-size:18px">🎖️ Badges</div>
+        <div id="badges-container" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div>
+      </div>
       <div id="progression-section" style="display:none;margin-top:28px">
         <div class="section-title" style="font-size:18px">📈 Progresión de puntos</div>
         <div id="progression-chart-container" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;overflow-x:auto"></div>
@@ -818,6 +843,112 @@ function renderStandings() {
   el.innerHTML = html;
 
   renderProgressionChart(sorted, resolvedMatches);
+  renderBadges(sorted, resolvedMatches);
+}
+
+// ─────────────────────────────────────────
+//  BADGES / LOGROS
+// ─────────────────────────────────────────
+function renderBadges(sortedScores, resolvedMatches) {
+  const section = document.getElementById("badges-section");
+  const container = document.getElementById("badges-container");
+  if (!section || !container) return;
+
+  if (resolvedMatches.length < 2 || sortedScores.length < 2) {
+    section.style.display = "none";
+    return;
+  }
+
+  const chronological = [...resolvedMatches].sort((a,b) => (a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
+  const badges = [];
+
+  // ── 1. Líder actual ──
+  if (sortedScores[0][1].pts > 0) {
+    badges.push({ icon: "👑", title: "Puntero", player: sortedScores[0][1].name, desc: `${sortedScores[0][1].pts} aciertos` });
+  }
+
+  // ── 2. Racha más larga de aciertos consecutivos ──
+  let bestStreak = { uid: null, len: 0 };
+  for (const [uid, s] of sortedScores) {
+    let cur = 0, best = 0;
+    for (const m of chronological) {
+      const pick = (allVotes[m.id] || {})[uid];
+      if (pick && pick === m.result) { cur++; best = Math.max(best, cur); }
+      else cur = 0;
+    }
+    if (best > bestStreak.len) bestStreak = { uid, len: best, name: s.name };
+  }
+  if (bestStreak.len >= 3) {
+    badges.push({ icon: "🔥", title: "En racha", player: bestStreak.name, desc: `${bestStreak.len} aciertos seguidos` });
+  }
+
+  // ── 3. Único en acertar un partido (más difícil = menos gente le pegó) ──
+  let rarestCorrect = null;
+  for (const m of chronological) {
+    const mv = allVotes[m.id] || {};
+    const correctUids = Object.entries(mv).filter(([uid, pick]) => pick === m.result).map(([uid]) => uid);
+    const totalVotesOnMatch = Object.keys(mv).length;
+    if (correctUids.length === 1 && totalVotesOnMatch >= 3) {
+      const uid = correctUids[0];
+      const pname = (players[uid] && players[uid].name) || uid;
+      if (!rarestCorrect) rarestCorrect = { name: pname, match: m };
+    }
+  }
+  if (rarestCorrect) {
+    badges.push({ icon: "🎯", title: "Ojo clínico", player: rarestCorrect.name, desc: `Único en acertar ${rarestCorrect.match.home} vs ${rarestCorrect.match.away}` });
+  }
+
+  // ── 4. El más arriesgado (más votos a Empate) ──
+  let mostDraws = { uid: null, count: -1 };
+  for (const [uid, s] of sortedScores) {
+    let count = 0;
+    for (const m of chronological) {
+      if ((allVotes[m.id] || {})[uid] === "X") count++;
+    }
+    if (count > mostDraws.count) mostDraws = { uid, count, name: s.name };
+  }
+  if (mostDraws.count >= 2) {
+    badges.push({ icon: "🎲", title: "Fan del empate", player: mostDraws.name, desc: `${mostDraws.count} pronósticos de empate` });
+  }
+
+  // ── 5. Mejor jornada (más aciertos en un solo día) ──
+  const dayGroups = {};
+  for (const m of chronological) { (dayGroups[m.date] = dayGroups[m.date] || []).push(m); }
+  let bestDay = { uid: null, count: 0 };
+  for (const [uid, s] of sortedScores) {
+    for (const [date, ms] of Object.entries(dayGroups)) {
+      let c = 0;
+      for (const m of ms) { if ((allVotes[m.id] || {})[uid] === m.result) c++; }
+      if (c > bestDay.count) bestDay = { uid, count: c, name: s.name, date };
+    }
+  }
+  if (bestDay.count >= 2) {
+    const [, mo, d] = bestDay.date.split("-");
+    badges.push({ icon: "⭐", title: "Mejor jornada", player: bestDay.name, desc: `${bestDay.count} aciertos el ${d}/${mo}` });
+  }
+
+  // ── 6. El más friolero (menos aciertos, con honor) ──
+  const last = sortedScores[sortedScores.length - 1];
+  if (sortedScores.length >= 3 && last[1].played > 0) {
+    badges.push({ icon: "🥄", title: "Farolito", player: last[1].name, desc: "Último en la tabla… por ahora" });
+  }
+
+  if (!badges.length) {
+    section.style.display = "none";
+    return;
+  }
+
+  section.style.display = "block";
+  container.innerHTML = badges.map(b => `
+    <div class="badge-card">
+      <div class="badge-icon">${b.icon}</div>
+      <div class="badge-info">
+        <div class="badge-title">${b.title}</div>
+        <div class="badge-player">${b.player}</div>
+        <div class="badge-desc">${b.desc}</div>
+      </div>
+    </div>
+  `).join("");
 }
 
 // ─────────────────────────────────────────
@@ -1473,6 +1604,35 @@ window.openPlayerModal = (uid) => {
 window.closeModal = (e) => {
   if (e.target.id === "player-modal") {
     document.getElementById("player-modal").classList.remove("open");
+  }
+};
+
+// ─────────────────────────────────────────
+//  EXPORT STANDINGS AS IMAGE
+// ─────────────────────────────────────────
+window.exportStandingsImage = async () => {
+  const btn = document.getElementById("export-btn");
+  const original = btn.textContent;
+  btn.textContent = "⏳ Generando...";
+  btn.disabled = true;
+  try {
+    const target = document.getElementById("standings-table-capture");
+    const canvas = await html2canvas(target, {
+      backgroundColor: "#0a0e1a",
+      scale: 2,
+      useCORS: true
+    });
+    const link = document.createElement("a");
+    const today = new Date().toISOString().slice(0,10);
+    link.download = `prode-mundial-2026-tabla-${today}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+    showToast("✓ Imagen descargada");
+  } catch (e) {
+    showToast("Error al exportar: " + e.message);
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
   }
 };
 
