@@ -1264,23 +1264,36 @@ window.changeAdminPass = async () => {
 // ─────────────────────────────────────────
 //  PLAYER MODAL
 // ─────────────────────────────────────────
+// Devuelve true si el partido ya arrancó (fecha+hora ya pasó), en hora Argentina (UTC-3)
+function matchHasStarted(m) {
+  if (!m.time) return !!m.result; // sin horario, solo mostramos si ya tiene resultado
+  // date/time están en hora Argentina (UTC-3) → construir el instante UTC correspondiente
+  const [y, mo, d] = m.date.split("-").map(Number);
+  const [h, mi] = m.time.split(":").map(Number);
+  const startUTC = new Date(Date.UTC(y, mo - 1, d, h + 3, mi)); // ART = UTC-3
+  return Date.now() >= startUTC.getTime();
+}
+
 window.openPlayerModal = (uid) => {
   const pdata = players[uid];
   if (!pdata) return;
+
   const resolvedMatches = matches.filter(m => m.result);
+  const startedMatches = matches.filter(m => matchHasStarted(m));
+  const startedNotFinished = startedMatches.filter(m => !m.result);
+
   const mv = {};
-  for (const m of resolvedMatches) {
+  for (const m of startedMatches) {
     const v = (allVotes[m.id] || {})[uid];
     if (v) mv[m.id] = v;
   }
 
-  let correct = 0, wrong = 0, noPick = 0;
+  let correct = 0, wrong = 0;
   for (const m of resolvedMatches) {
     const pick = mv[m.id];
-    if (!pick) { noPick++; continue; }
+    if (!pick) continue;
     if (pick === m.result) correct++; else wrong++;
   }
-  const total = resolvedMatches.length;
   const pct = (correct + wrong) > 0 ? Math.round(correct / (correct + wrong) * 100) : 0;
 
   // Stats row
@@ -1290,25 +1303,35 @@ window.openPlayerModal = (uid) => {
     + '<div class="modal-stat"><div class="modal-stat-val" style="color:var(--gold)">' + pct + '%</div><div class="modal-stat-lbl">Efectividad</div></div>'
     + '</div>';
 
-  if (!resolvedMatches.length) {
-    body += '<p style="text-align:center;color:var(--text-dim);font-size:13px">Aún no hay partidos con resultado.</p>';
+  if (!startedMatches.length) {
+    body += '<p style="text-align:center;color:var(--text-dim);font-size:13px">Todavía no arrancó ningún partido.</p>';
   } else {
-    for (const m of resolvedMatches) {
+    // Orden: más reciente primero
+    const ordered = [...startedMatches].sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time));
+    for (const m of ordered) {
       const pick = mv[m.id];
       const pickLabel = pick === "1" ? "1 " + m.home : pick === "X" ? "X Empate" : pick === "2" ? "2 " + m.away : null;
-      const resLabel  = m.result === "1" ? "1 " + m.home : m.result === "X" ? "X Empate" : "2 " + m.away;
-      let cls = "pick-none", icon = "—";
-      if (pick) {
-        const ok = pick === m.result;
-        cls = ok ? "pick-correct" : "pick-wrong";
-        icon = ok ? "✅" : "❌";
+      let rightSide;
+      if (m.result) {
+        const resLabel = m.result === "1" ? "1 " + m.home : m.result === "X" ? "X Empate" : "2 " + m.away;
+        let cls = "pick-none", icon = "—";
+        if (pick) {
+          const ok = pick === m.result;
+          cls = ok ? "pick-correct" : "pick-wrong";
+          icon = ok ? "✅" : "❌";
+        }
+        rightSide = (pick ? '<span class="modal-pick ' + cls + '">' + icon + ' ' + pickLabel + '</span>' : '<span class="modal-pick pick-none">Sin pick</span>')
+          + '<div style="font-size:10px;color:var(--text-dim);margin-top:3px">Resultado: ' + resLabel + '</div>';
+      } else {
+        // Partido en curso, sin resultado todavía — solo mostrar el pick (sin saber si acertó)
+        rightSide = pick
+          ? '<span class="modal-pick" style="background:var(--surface2);color:var(--gold);border:1px solid var(--gold)">🔮 ' + pickLabel + '</span>'
+          : '<span class="modal-pick pick-none">Sin pick</span>';
+        rightSide += '<div style="font-size:10px;color:var(--gold);margin-top:3px">⏳ En juego / por confirmar</div>';
       }
       body += '<div class="modal-match-row">'
-        + '<div class="modal-teams">' + m.homeFlag + ' ' + m.home + ' vs ' + m.awayFlag + ' ' + m.away + '<br>'
-        + '<span style="font-size:11px;color:var(--text-dim)">Resultado: ' + resLabel + '</span></div>'
-        + '<div style="text-align:right">'
-        + (pick ? '<span class="modal-pick ' + cls + '">' + icon + ' ' + pickLabel + '</span>' : '<span class="modal-pick pick-none">Sin pick</span>')
-        + '</div>'
+        + '<div class="modal-teams">' + m.homeFlag + ' ' + m.home + ' vs ' + m.awayFlag + ' ' + m.away + '</div>'
+        + '<div style="text-align:right">' + rightSide + '</div>'
         + '</div>';
     }
   }
@@ -1317,6 +1340,7 @@ window.openPlayerModal = (uid) => {
   document.getElementById("modal-body").innerHTML = body;
   document.getElementById("player-modal").classList.add("open");
 };
+
 
 window.closeModal = (e) => {
   if (e.target.id === "player-modal") {
