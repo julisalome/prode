@@ -388,7 +388,7 @@
       </div>
       <div id="progression-section" style="display:none;margin-top:28px">
         <div class="section-title" style="font-size:18px">📈 Progresión de puntos</div>
-        <div id="progression-chart-container" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;overflow-x:auto"></div>
+        <div id="progression-chart-container" style="background:var(--surface);border:1px solid var(--border);border-radius:14px"></div>
       </div>
     </div>
 
@@ -1056,16 +1056,37 @@ function renderProgressionChart(sortedScores, resolvedMatches) {
     </div>`;
   }
   legend += `</div>`;
+  if (chartW > 280) {
+    legend = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">← Deslizá para ver partidos anteriores</div>` + legend;
+  }
 
   container.innerHTML = `
-    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">
-      ${gridLines}
-      ${xLabels}
-      ${lines}
-      ${dots}
-    </svg>
-    ${legend}
+    <div style="position:relative">
+      <div id="progression-scroll-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding:16px 16px 0">
+        <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">
+          ${gridLines}
+          ${xLabels}
+          ${lines}
+          ${dots}
+        </svg>
+      </div>
+      ${chartW > 280 ? `<div id="scroll-fade-left" style="position:absolute;left:0;top:0;bottom:0;width:24px;background:linear-gradient(to right, var(--surface), transparent);pointer-events:none;opacity:0;transition:opacity .2s;border-radius:14px 0 0 14px"></div>` : ''}
+    </div>
+    <div style="padding:0 16px 16px">${legend}</div>
   `;
+
+  // Arrancar mostrando lo más reciente (scrolleado al final) — solo se ve el pasado si arrastrás hacia atrás
+  const scrollWrap = document.getElementById("progression-scroll-wrap");
+  if (scrollWrap) {
+    scrollWrap.scrollLeft = scrollWrap.scrollWidth;
+    const fadeLeft = document.getElementById("scroll-fade-left");
+    if (fadeLeft) {
+      const updateFade = () => { fadeLeft.style.opacity = scrollWrap.scrollLeft > 10 ? "0" : "1"; };
+      scrollWrap.addEventListener("scroll", updateFade);
+      // Mostrar el fade al principio para indicar "hay más a la izquierda" ya que arrancamos al final
+      setTimeout(() => { fadeLeft.style.opacity = "1"; }, 50);
+    }
+  }
 }
 
 // ─────────────────────────────────────────
