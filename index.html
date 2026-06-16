@@ -411,10 +411,10 @@
   </header>
 
   <nav>
-    <button onclick="showTab('tab-matches', this)">🗓 Partidos</button>
     <button class="active" onclick="showTab('tab-standings', this)">🏅 Tabla</button>
-    <button onclick="showTab('tab-myvotes', this)">📋 Mis Picks</button>
     <button onclick="showTab('tab-stats', this)">📊 Stats</button>
+    <button onclick="showTab('tab-matches', this)">🗓 Partidos</button>
+    <button onclick="showTab('tab-myvotes', this)">📋 Mis Picks</button>
     <button id="admin-tab-btn" style="display:none" onclick="showTab('tab-admin', this)">⚙️ Admin</button>
   </nav>
 
@@ -423,7 +423,6 @@
     <!-- MATCHES TAB -->
     <div id="tab-matches" class="tab-content">
       <div class="section-title">🗓 Partidos</div>
-      <div id="today-summary"></div>
       <div id="pending-reminder"></div>
       <div id="matches-list"><div class="loading"><div class="spinner"></div><br>Cargando partidos...</div></div>
     </div>
@@ -445,6 +444,7 @@
         <div class="section-title" style="font-size:18px">📈 Progresión de puntos</div>
         <div id="progression-chart-container" style="background:var(--surface);border:1px solid var(--border);border-radius:14px"></div>
       </div>
+      <div id="today-summary" style="margin-top:28px"></div>
     </div>
 
     <!-- MY VOTES TAB -->
@@ -964,6 +964,7 @@ function renderStandings() {
 
   renderProgressionChart(sorted, resolvedMatches);
   renderBadges(sorted, resolvedMatches);
+  renderTodaySummary();
 }
 
 // ─────────────────────────────────────────
