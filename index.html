@@ -984,19 +984,22 @@ function renderBadges(sortedScores, resolvedMatches) {
   const chronological = [...resolvedMatches].sort((a,b) => (a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
   const badges = [];
 
-  // ── 1. Racha más larga de aciertos consecutivos ──
+  // ── 1. Racha actual de aciertos consecutivos (vigente hasta el último partido) ──
   let bestStreak = { uid: null, len: 0 };
   for (const [uid, s] of sortedScores) {
-    let cur = 0, best = 0;
-    for (const m of chronological) {
+    // Contar hacia atrás desde el partido más reciente con pick, hasta el primer fallo
+    let current = 0;
+    for (let i = chronological.length - 1; i >= 0; i--) {
+      const m = chronological[i];
       const pick = (allVotes[m.id] || {})[uid];
-      if (pick && pick === m.result) { cur++; best = Math.max(best, cur); }
-      else cur = 0;
+      if (!pick) continue; // sin pick no rompe ni suma, se ignora ese partido
+      if (pick === m.result) current++;
+      else break; // racha actual terminó acá
     }
-    if (best > bestStreak.len) bestStreak = { uid, len: best, name: s.name };
+    if (current > bestStreak.len) bestStreak = { uid, len: current, name: s.name };
   }
   if (bestStreak.len >= 3) {
-    badges.push({ icon: "🔥", title: "En racha", player: bestStreak.name, desc: `${bestStreak.len} aciertos seguidos` });
+    badges.push({ icon: "🔥", title: "En racha", player: bestStreak.name, desc: `${bestStreak.len} aciertos seguidos (en curso)` });
   }
 
   // ── 3. Único en acertar un partido (más difícil = menos gente le pegó) ──
