@@ -694,6 +694,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
   // Init matches in Firestore if needed
   await initMatches();
+
+  // Refrescar cada 30 segundos para que el bloqueo de 10 min antes del partido
+  // se aplique en tiempo real, sin esperar a un cambio en Firestore
+  setInterval(() => {
+    if (document.getElementById("app")?.style.display !== "none") {
+      renderMatches();
+    }
+  }, 30000);
 });
 
 async function initMatches() {
@@ -872,6 +880,7 @@ function renderMatches() {
     }
     const myVote = votes[m.id];
     const resultLabel = resultText(m.result);
+    const locked = isVotingLocked(m);
 
     // Check if vote is correct/wrong
     let vote1Class = myVote === "1" ? "selected-1" : "";
@@ -883,12 +892,18 @@ function renderMatches() {
       if (myVote === "2") vote2Class += m.result === "2" ? " correct" : " wrong";
     }
 
+    const statusBadge = m.result
+      ? `<span class="result-badge ${m.result === "1" ? "win1" : m.result === "X" ? "draw" : "win2"}">${resultLabel}</span>`
+      : locked
+        ? `<span class="result-badge" style="background:var(--surface2);color:var(--gold)">🔒 Votación cerrada</span>`
+        : `<span class="result-badge pending">⏳ Por jugarse</span>`;
+
     html += `
     <div class="match-card">
       <div class="match-header">
         <span class="match-group">Grupo ${m.group}</span>
         <div style="display:flex;align-items:center;gap:8px">
-          ${m.result ? `<span class="result-badge ${m.result === "1" ? "win1" : m.result === "X" ? "draw" : "win2"}">${resultLabel}</span>` : '<span class="result-badge pending">⏳ Por jugarse</span>'}
+          ${statusBadge}
         </div>
       </div>
       <div class="match-teams">
@@ -905,13 +920,13 @@ function renderMatches() {
         </div>
       </div>
       <div class="vote-row">
-        <button class="vote-btn ${vote1Class}" onclick="castVote('${m.id}','1')">
+        <button class="vote-btn ${vote1Class}" ${locked ? 'disabled style="opacity:.5;cursor:not-allowed"' : ''} onclick="castVote('${m.id}','1')">
           1 <span class="vote-label">${m.home}</span>
         </button>
-        <button class="vote-btn ${voteXClass}" onclick="castVote('${m.id}','X')">
+        <button class="vote-btn ${voteXClass}" ${locked ? 'disabled style="opacity:.5;cursor:not-allowed"' : ''} onclick="castVote('${m.id}','X')">
           X <span class="vote-label">Empate</span>
         </button>
-        <button class="vote-btn ${vote2Class}" onclick="castVote('${m.id}','2')">
+        <button class="vote-btn ${vote2Class}" ${locked ? 'disabled style="opacity:.5;cursor:not-allowed"' : ''} onclick="castVote('${m.id}','2')">
           2 <span class="vote-label">${m.away}</span>
         </button>
       </div>
@@ -925,7 +940,12 @@ function renderMatches() {
 // ─────────────────────────────────────────
 window.castVote = async (matchId, pick) => {
   const match = matches.find(m => m.id === matchId);
-  if (match?.result) { showToast("El partido ya tiene resultado"); return; }
+  if (!match) return;
+  if (isVotingLocked(match)) {
+    showToast(match.result ? "El partido ya tiene resultado" : "Ya no podés votar — el partido arranca en menos de 10 minutos o ya empezó");
+    renderMatches(); // refrescar para sacar los botones si quedaron habilitados visualmente
+    return;
+  }
 
   votes[matchId] = pick;
   renderMatches();
@@ -1803,6 +1823,17 @@ window.changeAdminPass = async () => {
 // ─────────────────────────────────────────
 //  PLAYER MODAL
 // ─────────────────────────────────────────
+// Devuelve true si ya no se puede votar este partido (10 min antes del horario, o ya tiene resultado)
+function isVotingLocked(m) {
+  if (m.result) return true;
+  if (!m.time) return false;
+  const [y, mo, d] = m.date.split("-").map(Number);
+  const [h, mi] = m.time.split(":").map(Number);
+  const startUTC = new Date(Date.UTC(y, mo - 1, d, h + 3, mi)); // ART = UTC-3
+  const lockTime = startUTC.getTime() - 10 * 60 * 1000; // 10 minutos antes
+  return Date.now() >= lockTime;
+}
+
 // Devuelve true si el partido ya arrancó (fecha+hora ya pasó), en hora Argentina (UTC-3)
 function matchHasStarted(m) {
   if (!m.time) return !!m.result; // sin horario, solo mostramos si ya tiene resultado
