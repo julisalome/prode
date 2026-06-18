@@ -535,8 +535,8 @@
           <button class="btn btn-outline btn-sm" onclick="changeAdminPass()">Cambiar contraseña</button>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px">
-          <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px">⚠️ Reemplaza los partidos en Firestore con el fixture real del Mundial 2026 (borra los de prueba).</p>
-          <button class="btn btn-outline btn-sm" style="border-color:#ff3d3d;color:#ff3d3d" onclick="resetMatches()">🔄 Cargar fixture real del Mundial 2026</button>
+          <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Actualiza equipos, horarios y jornadas con el fixture oficial. Los resultados ya cargados NO se pierden.</p>
+          <button class="btn btn-outline btn-sm" onclick="resetMatches()">🔄 Actualizar fixture del Mundial 2026</button>
         </div>
         <div id="reset-msg"></div>
       </div>
@@ -755,7 +755,10 @@ function showApp(name) {
 async function loadAll() {
   // Live listeners
   onSnapshot(collection(db, "matches"), snap => {
-    matches = snap.docs.map(d => d.data()).sort((a,b) => a.date.localeCompare(b.date));
+    matches = snap.docs
+      .map(d => d.data())
+      .filter(m => m && m.id && m.date) // ignorar documentos corruptos/incompletos
+      .sort((a,b) => (a.date || "").localeCompare(b.date || ""));
     renderMatches();
     renderAdminMatches();
     renderStandings();
@@ -1506,11 +1509,33 @@ function findMatchInApi(appMatch, apiMatches) {
 }
 
 // ─────────────────────────────────────────
-//  KNOWN RESULTS — Última actualización: 12 Jun 2026
+//  KNOWN RESULTS — Última actualización: 18 Jun 2026 (Fecha 1 completa)
 // ─────────────────────────────────────────
 const KNOWN_RESULTS = [
   { id: "m001", result: "1" }, // México 2-0 Sudáfrica
-  { id: "m002", result: "2" }, // Corea del Sur 2-1 Chequia
+  { id: "m002", result: "1" }, // Corea del Sur 2-1 Chequia (home=Corea)
+  { id: "m007", result: "X" }, // Canadá 1-1 Bosnia
+  { id: "m008", result: "X" }, // Qatar 1-1 Suiza
+  { id: "m013", result: "X" }, // Brasil 1-1 Marruecos
+  { id: "m014", result: "2" }, // Haití 0-1 Escocia
+  { id: "m019", result: "1" }, // EEUU 4-1 Paraguay
+  { id: "m020", result: "1" }, // Australia 2-0 Turquía
+  { id: "m025", result: "1" }, // Alemania 7-1 Curazao
+  { id: "m026", result: "1" }, // Costa de Marfil 1-0 Ecuador
+  { id: "m031", result: "X" }, // Países Bajos 2-2 Japón
+  { id: "m032", result: "1" }, // Suecia 5-1 Túnez
+  { id: "m037", result: "X" }, // Bélgica 1-1 Egipto
+  { id: "m038", result: "X" }, // Irán 2-2 Nueva Zelanda
+  { id: "m043", result: "X" }, // España 0-0 Cabo Verde
+  { id: "m044", result: "X" }, // Arabia Saudita 1-1 Uruguay
+  { id: "m049", result: "1" }, // Francia 3-1 Senegal
+  { id: "m050", result: "2" }, // Irak 1-4 Noruega
+  { id: "m055", result: "1" }, // Argentina 3-0 Argelia
+  { id: "m056", result: "1" }, // Austria 3-1 Jordania
+  { id: "m061", result: "X" }, // Portugal 1-1 RD Congo
+  { id: "m062", result: "2" }, // Uzbekistán 1-3 Colombia
+  { id: "m067", result: "1" }, // Inglaterra 4-2 Croacia
+  { id: "m068", result: "1" }, // Ghana 1-0 Panamá
 ];
 
 function renderKnownResults() {
@@ -1685,34 +1710,44 @@ window.applyKnownResults = async () => {
 //  ADMIN — change password
 // ─────────────────────────────────────────
 window.resetMatches = async () => {
-  if (!confirm('¿Seguro? Esto borra los partidos actuales y carga el fixture real del Mundial 2026.')) return;
-  showMsg('reset-msg', '⏳ Cargando...', 'ok');
+  if (!confirm('¿Actualizar el fixture? Esto agrega/corrige datos de los partidos (equipos, horarios, jornada) SIN borrar los resultados que ya cargaste.')) return;
+  showMsg('reset-msg', '⏳ Actualizando...', 'ok');
   try {
-    // Delete existing matches
+    // Traer resultados actuales para no perderlos
     const snap = await getDocs(collection(db, 'matches'));
-    for (const d of snap.docs) {
-      await setDoc(doc(db, 'matches', d.id), { _delete: true }); // overwrite
-    }
-    // Write all real matches
+    const existingResults = {};
+    snap.docs.forEach(d => {
+      const data = d.data();
+      if (data && data.result) existingResults[d.id] = data.result;
+    });
+
+    // Escribir/actualizar cada partido con merge — nunca pisa el campo result si ya existía
     for (const m of INITIAL_MATCHES) {
-      await setDoc(doc(db, 'matches', m.id), m);
+      const payload = { ...m };
+      if (existingResults[m.id]) payload.result = existingResults[m.id];
+      await setDoc(doc(db, 'matches', m.id), payload, { merge: true });
     }
-    // Seed known results
+
+    // Resultados conocidos manualmente (solo si todavía no tienen resultado)
     const knownResults = {
       'm001': '1', // México 2-0 Sudáfrica
       'm002': '2', // Corea del Sur 2-1 Chequia
     };
     for (const [id, result] of Object.entries(knownResults)) {
-      await updateDoc(doc(db, 'matches', id), { result });
+      if (!existingResults[id]) {
+        await updateDoc(doc(db, 'matches', id), { result });
+      }
     }
-    // Delete any old match docs not in new list
+
+    // Borrar documentos viejos que ya no existen en el fixture nuevo (de verdad, con deleteDoc)
     const newIds = new Set(INITIAL_MATCHES.map(m => m.id));
     for (const d of snap.docs) {
       if (!newIds.has(d.id)) {
-        await setDoc(doc(db, 'matches', d.id), {});
+        await deleteDoc(doc(db, 'matches', d.id));
       }
     }
-    showMsg('reset-msg', '✓ Fixture del Mundial 2026 cargado (' + INITIAL_MATCHES.length + ' partidos)', 'ok');
+
+    showMsg('reset-msg', '✓ Fixture actualizado (' + INITIAL_MATCHES.length + ' partidos) — resultados preservados', 'ok');
   } catch(e) {
     showMsg('reset-msg', 'Error: ' + e.message, 'err');
   }
